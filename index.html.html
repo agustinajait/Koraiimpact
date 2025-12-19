@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korai - Tu Acompañante Social</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-12px); }
+        }
+        
+        @keyframes bounce-in {
+            0% { transform: scale(0) translateY(20px); opacity: 0; }
+            50% { transform: scale(1.1) translateY(-10px); }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        
+        @keyframes pulse-heart {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .animate-bounce-in { animation: bounce-in 0.5s ease-out; }
+        .animate-pulse-heart { animation: pulse-heart 2s ease-in-out infinite; }
+        
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite;
+        }
+        
+        button:focus-visible, input:focus-visible {
+            outline: 3px solid #8B5CF6;
+            outline-offset: 2px;
+        }
+        
+        .item-marcado {
+            animation: bounce-in 0.4s ease-out;
+        }
+        
+        /* Círculo de progreso countdown */
+        .progress-circle {
+            transition: stroke-dashoffset 1s linear;
+        }
+        
+        /* Toast animations */
+        @keyframes slide-up {
+            from { transform: translate(-50%, 100px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        
+        .toast-enter {
+            animation: slide-up 0.4s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 min-h-screen">
+    
+    <!-- Toggle de voz (flotante) -->
+    <button 
+        id="vozToggle"
+        onclick="toggleVoz()"
+        class="hidden fixed top-4 right-4 z-50 bg-white rounded-full w-14 h-14 shadow-lg flex items-center justify-center hover:shadow-xl transition-all"
+        aria-label="Activar o desactivar voz de Korai">
+        <span id="vozIcon" class="text-2xl">🔊</span>
+    </button>
+    
+    <!-- Navbar -->
+    <nav id="navbar" class="bg-white shadow-md sticky top-0 z-40 hidden">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold text-xl px-4 py-2 rounded-lg">
+                        KORAI
+                    </div>
+                    <span id="navName" class="text-gray-700 font-medium"></span>
+                </div>
+                <div class="flex gap-2 overflow-x-auto">
+                    <button onclick="goTo('semaforo')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">🚦 Resultados</button>
+                    <button onclick="goTo('prioridades')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">🎯 Prioridades</button>
+                    <button onclick="goTo('metas')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">🎯 Mis Metas</button>
+                    <button onclick="goTo('recursos')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">📚 Recursos</button>
+                    <button onclick="goTo('dashboard')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">🗺️ Dashboard</button>
+                    <button onclick="goTo('perfil')" class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 whitespace-nowrap">👤 Perfil</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="app"></div>
+
+    <script>
+        // ============================================
+        // ESTADO GLOBAL
+        // ============================================
+        const state = {
+            etapa: 'bienvenida',
+            mundoActual: null,
+            mundoIndex: 0,
+            
+            persona: {
+                nombre: '',
+                edad: null,
+                barrio: '',
+                videoBlobUrl: null,
+                videoBase64: null,
+                videoBlob: null
+            },
+            
+            respuestas: {},
+            
+            minimapa: {
+                mundosCompletados: [],
+                mundoActual: null
+            },
+            
+            diagnostico: null,
+            pausaHumanaCompletada: false,
+            esDemo: false
+        };
+
+        // ============================================
+        // DATOS: MUNDOS CON CRITICIDAD Y PESOS
+        // ============================================
+        const mundos = [
+            {
+                id: 'salud',
+                nombre: 'Salud',
+                icono: '🏥',
+                color: 'from-emerald-400 to-teal-500',
+                colorBg: 'bg-emerald-50',
+                microrelato: 'Tu salud y la de tu familia es lo más importante',
+                items: [
+                    { id: 'alimentacion', texto: 'Nos alimentamos bien todos los días', criticidad: 'ALTA', peso: 3 },
+                    { id: 'alimentacion_balanceada', texto: 'Comemos variado: frutas, verduras, carne', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'higiene', texto: 'Podemos bañarnos y lavarnos regularmente', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'dientes', texto: 'Tenemos los dientes sanos, sin caries importantes', criticidad: 'BAJA', peso: 1 },
+                    { id: 'vista', texto: 'Vemos bien o usamos anteojos si los necesitamos', criticidad: 'BAJA', peso: 1 },
+                    { id: 'enfermedades', texto: 'Si alguien está enfermo, puede tratarse', criticidad: 'ALTA', peso: 3 },
+                    { id: 'vacunas', texto: 'Los chicos tienen las vacunas al día', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'medico', texto: 'Podemos ir al médico cuando lo necesitamos', criticidad: 'ALTA', peso: 3 }
+                ],
+                umbrales: { rojo: { criticas: 2, puntaje: 8 }, amarillo: { criticas: 1, puntaje: 12 } }
+            },
+            {
+                id: 'educacion',
+                nombre: 'Educación',
+                icono: '📚',
+                color: 'from-blue-400 to-indigo-500',
+                colorBg: 'bg-blue-50',
+                microrelato: 'Aprender abre puertas',
+                items: [
+                    { id: 'leer', texto: 'Todos sabemos leer y escribir', criticidad: 'ALTA', peso: 3 },
+                    { id: 'idioma', texto: 'Alguien de la familia sabe otro idioma', criticidad: 'BAJA', peso: 1 },
+                    { id: 'escuela', texto: 'Los chicos van a la escuela', criticidad: 'ALTA', peso: 3 },
+                    { id: 'adultos_estudian', texto: 'Algún adulto está estudiando', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'utiles', texto: 'Tenemos cuadernos, lápices, lo necesario', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'maestros', texto: 'Hablamos con los maestros de los chicos', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'tecnologia', texto: 'Sabemos usar celular, computadora', criticidad: 'BAJA', peso: 1 },
+                    { id: 'buena_escuela', texto: 'Hay una escuela buena cerca de casa', criticidad: 'MEDIA', peso: 2 }
+                ],
+                umbrales: { rojo: { criticas: 2, puntaje: 8 }, amarillo: { criticas: 1, puntaje: 12 } }
+            },
+            {
+                id: 'trabajo',
+                nombre: 'Trabajo',
+                icono: '💼',
+                color: 'from-yellow-400 to-orange-500',
+                colorBg: 'bg-yellow-50',
+                microrelato: 'El trabajo nos da dignidad y estabilidad',
+                items: [
+                    { id: 'plata_alcanza', texto: 'La plata nos alcanza para vivir', criticidad: 'ALTA', peso: 3 },
+                    { id: 'ingresos_fijos', texto: 'Ganamos más o menos lo mismo cada mes', criticidad: 'ALTA', peso: 3 },
+                    { id: 'varias_changas', texto: 'Hay varias personas que aportan plata', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'buscando', texto: 'Estamos buscando trabajo activamente', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'oficio', texto: 'Sabemos hacer algo: cocinar, arreglar, limpiar', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'chicos_no_trabajan', texto: 'Los chicos NO tienen que trabajar', criticidad: 'ALTA', peso: 3 },
+                    { id: 'adultos_laburan', texto: 'Los adultos tienen trabajo', criticidad: 'ALTA', peso: 3 },
+                    { id: 'organizamos', texto: 'Sabemos en qué gastamos la plata', criticidad: 'BAJA', peso: 1 }
+                ],
+                umbrales: { rojo: { criticas: 3, puntaje: 10 }, amarillo: { criticas: 2, puntaje: 14 } }
+            },
+            {
+                id: 'vivienda',
+                nombre: 'Vivienda',
+                icono: '🏠',
+                color: 'from-orange-400 to-red-500',
+                colorBg: 'bg-orange-50',
+                microrelato: 'Tu casa es tu refugio',
+                items: [
+                    { id: 'agua', texto: 'Tenemos agua para tomar y cocinar', criticidad: 'ALTA', peso: 3 },
+                    { id: 'luz', texto: 'Tenemos luz eléctrica', criticidad: 'ALTA', peso: 3 },
+                    { id: 'telefono', texto: 'Tenemos teléfono o internet', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'propia', texto: 'No compartimos la casa con otra familia', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'barrio_tranquilo', texto: 'Podemos salir tranquilos del barrio', criticidad: 'ALTA', peso: 3 },
+                    { id: 'casa_firme', texto: 'La casa está en buen estado, no se llueve', criticidad: 'ALTA', peso: 3 },
+                    { id: 'heladera', texto: 'Tenemos heladera, cocina', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'espacio', texto: 'Tenemos suficiente espacio para dormir', criticidad: 'MEDIA', peso: 2 }
+                ],
+                umbrales: { rojo: { criticas: 3, puntaje: 10 }, amarillo: { criticas: 2, puntaje: 14 } }
+            },
+            {
+                id: 'economia',
+                nombre: 'Economía',
+                icono: '💰',
+                color: 'from-purple-400 to-pink-500',
+                colorBg: 'bg-purple-50',
+                microrelato: 'Documentos, ahorros y planificación',
+                items: [
+                    { id: 'dni', texto: 'Todos tenemos DNI', criticidad: 'ALTA', peso: 3 },
+                    { id: 'banco', texto: 'Tenemos cuenta en el banco', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'credito', texto: 'Podríamos sacar un crédito si lo necesitamos', criticidad: 'BAJA', peso: 1 },
+                    { id: 'ahorros', texto: 'Tenemos algo de plata guardada', criticidad: 'BAJA', peso: 1 },
+                    { id: 'seguro', texto: 'Tenemos obra social o seguro', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'servicios', texto: 'Pagamos la luz, el agua al día', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'planes', texto: 'Tenemos planes para el futuro', criticidad: 'BAJA', peso: 1 },
+                    { id: 'sin_violencia', texto: 'No hay violencia en la familia', criticidad: 'ALTA', peso: 3 }
+                ],
+                umbrales: { rojo: { criticas: 2, puntaje: 8 }, amarillo: { criticas: 1, puntaje: 11 } }
+            },
+            {
+                id: 'comunidad',
+                nombre: 'Comunidad',
+                icono: '🤝',
+                color: 'from-pink-400 to-rose-500',
+                colorBg: 'bg-pink-50',
+                microrelato: 'Nadie puede sola',
+                items: [
+                    { id: 'apoyo', texto: 'Tenemos familia o amigos que nos ayudan', criticidad: 'ALTA', peso: 3 },
+                    { id: 'deporte', texto: 'Hacemos algún deporte o actividad física', criticidad: 'BAJA', peso: 1 },
+                    { id: 'participamos', texto: 'Vamos a reuniones del barrio, la escuela', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'diversion', texto: 'Tenemos algo que nos gusta hacer', criticidad: 'BAJA', peso: 1 },
+                    { id: 'respeto', texto: 'Respetamos a todos, aunque sean diferentes', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'grupos', texto: 'Somos parte de algún grupo: iglesia, club', criticidad: 'BAJA', peso: 1 },
+                    { id: 'decidimos', texto: 'Podemos decidir sobre nuestra vida', criticidad: 'MEDIA', peso: 2 },
+                    { id: 'informados', texto: 'Sabemos de programas que nos pueden ayudar', criticidad: 'MEDIA', peso: 2 }
+                ],
+                umbrales: { rojo: { criticas: 2, puntaje: 7 }, amarillo: { criticas: 1, puntaje: 10 } }
+            }
+        ];
+
+        // Programas
+        const programas = {
+            salud: [
+                { nombre: 'CAPS', url: 'https://www.argentina.gob.ar/salud/caps', desc: 'Atención médica gratuita' },
+                { nombre: 'Plan Sumar', url: 'https://www.argentina.gob.ar/salud/sumar', desc: 'Cobertura de salud' }
+            ],
+            educacion: [
+                { nombre: 'Plan FinEs', url: 'https://www.argentina.gob.ar/educacion/fines', desc: 'Terminar secundaria' },
+                { nombre: 'Becas Progresar', url: 'https://www.argentina.gob.ar/educacion/progresar', desc: 'Becas' }
+            ],
+            trabajo: [
+                { nombre: 'Portal Empleo', url: 'https://www.argentina.gob.ar/trabajo/buscarempleo', desc: 'Búsqueda' },
+                { nombre: 'Potenciar Trabajo', url: 'https://www.argentina.gob.ar/desarrollosocial/potenciartrabajo', desc: 'Inclusión' }
+            ],
+            vivienda: [
+                { nombre: 'PROCREAR', url: 'https://www.argentina.gob.ar/habitat/procrear', desc: 'Créditos' },
+                { nombre: 'Tarifa Social', url: 'https://www.argentina.gob.ar/servicio/solicitar-la-tarifa-social', desc: 'Descuentos' }
+            ],
+            economia: [
+                { nombre: 'AUH', url: 'https://www.anses.gob.ar/asignacion-universal-por-hijo', desc: 'Ayuda mensual' },
+                { nombre: 'Tarjeta Alimentar', url: 'https://www.argentina.gob.ar/desarrollosocial/tarjetaalimentar', desc: 'Alimentación' },
+                { nombre: 'Cuenta DNI', url: 'https://www.bna.com.ar/Personas/CuentaDNI', desc: 'Bancaria' }
+            ],
+            comunidad: [
+                { nombre: 'Clubes de Barrio', url: 'https://www.argentina.gob.ar/desarrollo-social/clubes-de-barrio', desc: 'Deportes' },
+                { nombre: 'Línea 144', url: 'https://www.argentina.gob.ar/generos/linea-144', desc: 'Violencia 24hs' }
+            ]
+        };
+
+        // ============================================
+        // VOZ DE KORAI (TTS)
+        // ============================================
+        const koraiVoz = {
+            activa: true,
+            voz: null,
+            hablandoAhora: false,
+            
+            init() {
+                if ('speechSynthesis' in window) {
+                    const cargarVoces = () => {
+                        const voces = speechSynthesis.getVoices();
+                        
+                        console.log('🎤 Voces disponibles:', voces.map(v => `${v.name} (${v.lang})`));
+                        
+                        // Prioridad 1: Español Argentina femenina
+                        this.voz = voces.find(v => 
+                            v.lang === 'es-AR' && 
+                            (v.name.toLowerCase().includes('female') || 
+                             v.name.toLowerCase().includes('mujer') ||
+                             v.name.toLowerCase().includes('woman') ||
+                             v.name.toLowerCase().includes('laura') ||
+                             v.name.toLowerCase().includes('maria') ||
+                             v.name.toLowerCase().includes('monica'))
+                        );
+                        
+                        // Prioridad 2: Español latinoamérica femenina
+                        if (!this.voz) {
+                            this.voz = voces.find(v => 
+                                (v.lang === 'es-MX' || v.lang === 'es-CO' || v.lang === 'es-CL') &&
+                                (v.name.toLowerCase().includes('female') || 
+                                 v.name.toLowerCase().includes('mujer') ||
+                                 v.name.toLowerCase().includes('paulina') ||
+                                 v.name.toLowerCase().includes('angelica'))
+                            );
+                        }
+                        
+                        // Prioridad 3: Cualquier español femenina
+                        if (!this.voz) {
+                            this.voz = voces.find(v => 
+                                v.lang.startsWith('es-') &&
+                                (v.name.toLowerCase().includes('female') || 
+                                 v.name.toLowerCase().includes('woman') ||
+                                 v.name.toLowerCase().includes('mujer'))
+                            );
+                        }
+                        
+                        // Prioridad 4: Español genérica (buscar nombres típicamente femeninos)
+                        if (!this.voz) {
+                            this.voz = voces.find(v => 
+                                v.lang.startsWith('es-') &&
+                                (v.name.includes('Mónica') ||
+                                 v.name.includes('Laura') ||
+                                 v.name.includes('María') ||
+                                 v.name.includes('Carmen') ||
+                                 v.name.includes('Paulina'))
+                            );
+                        }
+                        
+                        // Fallback: Cualquier español (última opción)
+                        if (!this.voz) {
+                            this.voz = voces.find(v => v.lang.startsWith('es-'));
+                        }
+                        
+                        console.log('✅ Voz seleccionada:', this.voz?.name || 'Sistema default');
+                        console.log('   Idioma:', this.voz?.lang);
+                        console.log('   Local:', this.voz?.localService ? 'Sí' : 'No');
+                        
+                        if (!this.voz || (!this.voz.name.toLowerCase().includes('female') && 
+                                         !this.voz.name.toLowerCase().includes('mujer') &&
+                                         !this.voz.name.includes('Laura') &&
+                                         !this.voz.name.includes('María'))) {
+                            console.warn('⚠️ No se encontró voz femenina clara. Considera instalar voces adicionales.');
+                        }
+                    };
+                    
+                    speechSynthesis.onvoiceschanged = cargarVoces;
+                    cargarVoces();
+                    
+                    // Mostrar toggle
+                    document.getElementById('vozToggle').classList.remove('hidden');
+                }
+            },
+            
+            hablar(texto, opciones = {}) {
+                if (!this.activa || !('speechSynthesis' in window) || !texto) return;
+                
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(texto);
+                
+                if (this.voz) utterance.voice = this.voz;
+                
+                utterance.lang = 'es-AR';
+                utterance.rate = opciones.velocidad || 0.9;
+                utterance.pitch = opciones.tono || 1.1;
+                utterance.volume = opciones.volumen || 0.8;
+                
+                utterance.onstart = () => { this.hablandoAhora = true; };
+                utterance.onend = () => { this.hablandoAhora = false; };
+                
+                speechSynthesis.speak(utterance);
+            },
+            
+            detener() {
+                speechSynthesis.cancel();
+                this.hablandoAhora = false;
+            },
+            
+            toggle() {
+                this.activa = !this.activa;
+                if (!this.activa) this.detener();
+                return this.activa;
+            }
+        };
+
+        // Textos de Korai
+        const textosKorai = {
+            bienvenida: "Hola, soy Korai. Estoy acá para acompañarte. Vamos a conocer tu situación juntas, sin apuro, sin juicio. Empecemos cuando estés lista.",
+            mundos: {
+                salud: "Hablemos de tu salud. Marcá solo lo que realmente tenés resuelto hoy.",
+                educacion: "Pasemos a educación. Acordate, no hay respuestas buenas o malas.",
+                trabajo: "Hablemos de trabajo. Marcá con confianza lo que sea real para vos.",
+                vivienda: "Ahora tu casa. Este es tu refugio, contame cómo está.",
+                economia: "Hablemos de tus documentos y tu economía. Sin presión.",
+                comunidad: "Por último, tu red de apoyo. Nadie puede sola, contame con quién contás."
+            },
+            finMundo: {
+                salud: "Gracias por compartir esto sobre tu salud. Sigamos.",
+                educacion: "Perfecto. Avancemos juntas.",
+                trabajo: "Gracias por tu sinceridad. Continuemos.",
+                vivienda: "Bien. Vamos al próximo.",
+                economia: "Gracias. Sigamos adelante.",
+                comunidad: "Ya terminamos. Ahora voy a analizar todo lo que me contaste."
+            },
+            pausa: "Antes de seguir, necesito conocerte un poquito más. Contame tu nombre, tu edad y dónde vivís. Y si querés, grabá un video corto presentándote. Es opcional, pero me ayuda mucho a conocerte.",
+            procesando: "Estoy analizando tu situación. Dame unos segundos.",
+            resultados: {
+                rojo: "Vi que hay varias cosas urgentes que necesitás. Pero tranquila, no estás sola. Vamos a trabajar en esto paso a paso.",
+                amarillo: "Hay algunas cosas importantes que podemos mejorar. Vamos a enfocarnos en tus prioridades.",
+                verde: "Tu situación está estable. Sigamos trabajando para que siga así."
+            }
+        };
+
+        // ============================================
+        // VIDEO RECORDER MEJORADO
+        // ============================================
+        const videoRecorder = {
+            mediaRecorder: null,
+            stream: null,
+            chunks: [],
+            timer: null,
+            maxDuracion: 15,
+            maxSize: 10 * 1024 * 1024,
+            
+            async iniciar() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+                        audio: true
+                    });
+                    
+                    this.mostrarModal();
+                    
+                    const preview = document.getElementById('videoPreview');
+                    preview.srcObject = this.stream;
+                    preview.play();
+                    
+                    this.mediaRecorder = new MediaRecorder(this.stream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+                    
+                    this.chunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) this.chunks.push(e.data);
+                    };
+                    
+                    this.mediaRecorder.onstop = () => this.procesarVideo();
+                    this.mediaRecorder.start(100);
+                    this.iniciarCountdown();
+                    
+                    setTimeout(() => {
+                        koraiVoz.hablar("Adelante, presentate. Tenés 15 segundos.");
+                    }, 500);
+                    
+                } catch (error) {
+                    this.manejarError(error);
+                }
+            },
+            
+            iniciarCountdown() {
+                let segundos = this.maxDuracion;
+                const countdownEl = document.getElementById('countdown');
+                const circleEl = document.getElementById('progressCircle');
+                
+                this.timer = setInterval(() => {
+                    segundos--;
+                    countdownEl.textContent = segundos;
+                    
+                    const offset = 283 - (283 * segundos / this.maxDuracion);
+                    circleEl.style.strokeDashoffset = offset;
+                    
+                    if (segundos <= 5) {
+                        countdownEl.classList.add('text-red-600');
+                        circleEl.classList.add('stroke-red-600');
+                    }
+                    
+                    if (segundos <= 0) this.detener();
+                }, 1000);
+            },
+            
+            detener() {
+                clearInterval(this.timer);
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                }
+            },
+            
+            async procesarVideo() {
+                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                
+                if (blob.size > this.maxSize) {
+                    alert('El video es muy pesado. Intentá grabar algo más corto.');
+                    this.reiniciar();
+                    return;
+                }
+                
+                const url = URL.createObjectURL(blob);
+                state.persona.videoBlobUrl = url;
+                state.persona.videoBlob = blob;
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    state.persona.videoBase64 = reader.result;
+                };
+                reader.readAsDataURL(blob);
+                
+                this.cerrarModal();
+                
+                setTimeout(() => {
+                    koraiVoz.hablar("Perfecto. Gracias por presentarte.");
+                }, 300);
+                
+                render();
+            },
+            
+            manejarError(error) {
+                console.error('Error video:', error);
+                let mensaje = 'No pudimos acceder a tu cámara. ';
+                
+                if (error.name === 'NotAllowedError') {
+                    mensaje += 'Necesitamos tu permiso. Podés continuar sin video.';
+                } else if (error.name === 'NotFoundError') {
+                    mensaje += 'No encontramos cámara en tu dispositivo.';
+                } else {
+                    mensaje += 'Hubo un problema técnico.';
+                }
+                
+                koraiVoz.hablar(mensaje);
+                alert(mensaje);
+                this.cerrarModal();
+            },
+            
+            reiniciar() {
+                state.persona.videoBlobUrl = null;
+                state.persona.videoBase64 = null;
+                state.persona.videoBlob = null;
+                this.chunks = [];
+                render();
+            },
+            
+            mostrarModal() {
+                const html = `
+                    <div id="modalGrabacion" class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-3xl p-6 max-w-lg w-full">
+                            <div class="text-center mb-4">
+                                <h3 class="text-2xl font-bold text-gray-800">Presentate</h3>
+                                <p class="text-gray-600 text-sm">15 segundos para contarnos quién sos</p>
+                            </div>
+                            <div class="relative mb-4">
+                                <video id="videoPreview" autoplay muted playsinline class="w-full rounded-2xl bg-black aspect-[9/16]"></video>
+                                <div class="absolute top-4 right-4">
+                                    <svg class="w-20 h-20 transform -rotate-90">
+                                        <circle cx="40" cy="40" r="36" stroke="#e5e7eb" stroke-width="8" fill="transparent"/>
+                                        <circle id="progressCircle" cx="40" cy="40" r="36" stroke="#ef4444" stroke-width="8" fill="transparent" stroke-dasharray="283" stroke-dashoffset="0" class="progress-circle"/>
+                                    </svg>
+                                    <div class="absolute inset-0 flex items-center justify-center">
+                                        <span id="countdown" class="text-3xl font-bold text-white">15</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="videoRecorder.detener()" class="w-full bg-red-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-red-700 transition-all">
+                                ⏹ Detener
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', html);
+            },
+            
+            cerrarModal() {
+                const modal = document.getElementById('modalGrabacion');
+                if (modal) modal.remove();
+            }
+        };
+
+        // ============================================
+        // TRANSFORMADOR DE ITEMS A ACCIONES
+        // ============================================
+        const transformarItemAAccion = {
+            // SALUD
+            'alimentacion': 'Asegurar que toda la familia se alimente bien todos los días',
+            'alimentacion_balanceada': 'Incorporar frutas, verduras y carne a la alimentación diaria',
+            'higiene': 'Garantizar acceso regular a higiene y baño para toda la familia',
+            'dientes': 'Realizar controles dentales y tratar caries existentes',
+            'vista': 'Hacer controles de vista y conseguir anteojos si son necesarios',
+            'enfermedades': 'Asegurar acceso a tratamiento médico cuando alguien se enferme',
+            'vacunas': 'Completar el calendario de vacunación de los chicos',
+            'medico': 'Garantizar acceso a consultas médicas cuando sea necesario',
+            
+            // EDUCACIÓN
+            'leer': 'Fortalecer la alfabetización de todos los miembros de la familia',
+            'idioma': 'Explorar oportunidades de aprender otro idioma',
+            'escuela': 'Fortalecer el acompañamiento para que los chicos vayan a la escuela todos los días',
+            'adultos_estudian': 'Retomar los estudios o capacitaciones para adultos',
+            'utiles': 'Conseguir cuadernos, lápices y útiles básicos para estudiar con tranquilidad',
+            'maestros': 'Establecer diálogo regular con los maestros de los chicos',
+            'tecnologia': 'Aprender a usar celular, computadora y herramientas digitales',
+            'buena_escuela': 'Explorar opciones de escuelas de calidad cerca de casa',
+            
+            // TRABAJO
+            'plata_alcanza': 'Aumentar los ingresos para cubrir las necesidades básicas',
+            'ingresos_fijos': 'Buscar estabilidad en los ingresos mensuales',
+            'varias_changas': 'Diversificar las fuentes de ingreso familiar',
+            'buscando': 'Intensificar la búsqueda activa de trabajo',
+            'oficio': 'Capacitarse en un oficio o habilidad específica',
+            'chicos_no_trabajan': 'Garantizar que los chicos NO tengan que trabajar',
+            'adultos_laburan': 'Conseguir trabajo para los adultos de la familia',
+            'organizamos': 'Aprender a organizar y planificar los gastos',
+            
+            // VIVIENDA
+            'agua': 'Asegurar acceso regular a agua potable para tomar y cocinar',
+            'luz': 'Garantizar conexión estable de luz eléctrica',
+            'telefono': 'Conseguir teléfono o acceso a internet',
+            'propia': 'Evitar hacinamiento y compartir vivienda con otras familias',
+            'barrio_tranquilo': 'Mejorar la seguridad para poder salir tranquilos del barrio',
+            'casa_firme': 'Reparar y mejorar las condiciones de la casa para que no se llueva',
+            'heladera': 'Conseguir heladera, cocina y electrodomésticos básicos',
+            'espacio': 'Ampliar o mejorar el espacio para dormir',
+            
+            // ECONOMÍA
+            'dni': 'Tramitar o renovar el DNI de todos los miembros',
+            'banco': 'Abrir cuenta bancaria para gestionar la plata',
+            'credito': 'Explorar opciones de acceso a crédito si es necesario',
+            'ahorros': 'Empezar a guardar aunque sea un poco de plata',
+            'seguro': 'Conseguir obra social o algún tipo de seguro de salud',
+            'servicios': 'Ponerse al día con los pagos de luz, agua y servicios',
+            'planes': 'Hacer planes concretos para el futuro familiar',
+            'sin_violencia': 'Buscar ayuda urgente para detener la violencia familiar',
+            
+            // COMUNIDAD
+            'apoyo': 'Construir una red de familia o amigos que puedan ayudar',
+            'deporte': 'Incorporar deporte o actividad física regular',
+            'participamos': 'Participar en reuniones del barrio, la escuela o comunidad',
+            'diversion': 'Encontrar actividades que disfruten hacer',
+            'respeto': 'Fortalecer el respeto y la convivencia con personas diferentes',
+            'grupos': 'Integrarse a algún grupo: iglesia, club u organización',
+            'decidimos': 'Fortalecer la autonomía para decidir sobre la propia vida',
+            'informados': 'Informarse sobre programas sociales que pueden ayudar'
+        };
+
+        function convertirItemAAccion(mundoId, itemId, criticidad) {
+            const accion = transformarItemAAccion[itemId] || 'Trabajar en mejorar esta área';
+            
+            let sufijo = '';
+            if (criticidad === 'ALTA') {
+                sufijo = ' (Urgente)';
+            } else if (criticidad === 'MEDIA') {
+                sufijo = ' (Prioridad)';
+            }
+            
+            return accion + sufijo;
+        }
+
+        // ============================================
+        // ALGORITMO DE DIAGNÓSTICO REAL
+        // ============================================
+        function diagnosticarMundo(mundoId) {
+            const mundo = mundos.find(m => m.id === mundoId);
+            const respuestas = mundo.items.map(item => ({
+                item,
+                tiene: state.respuestas[`${mundoId}_${item.id}`] === true
+            }));
+            
+            const criticasFaltantes = respuestas.filter(r => r.item.criticidad === 'ALTA' && !r.tiene).length;
+            const puntaje = respuestas.reduce((sum, r) => sum + (r.tiene ? r.item.peso : 0), 0);
+            const puntajeMaximo = mundo.items.reduce((sum, item) => sum + item.peso, 0);
+            
+            let nivel, color, mensaje;
+            
+            if (criticasFaltantes >= mundo.umbrales.rojo.criticas || puntaje < mundo.umbrales.rojo.puntaje) {
+                nivel = 'ROJO';
+                color = 'bg-red-500';
+                mensaje = 'Necesitás atención urgente en esta área';
+            } else if (criticasFaltantes >= mundo.umbrales.amarillo.criticas || puntaje < mundo.umbrales.amarillo.puntaje) {
+                nivel = 'AMARILLO';
+                color = 'bg-yellow-500';
+                mensaje = 'Hay cosas importantes que podemos mejorar';
+            } else {
+                nivel = 'VERDE';
+                color = 'bg-green-500';
+                mensaje = 'Estás bien en esta área';
+            }
+            
+            // CORREGIDO: Prioridades son lo que NO tiene (falta trabajar)
+            // Ordenadas por criticidad: ALTA primero, luego MEDIA
+            const prioridades = respuestas
+                .filter(r => !r.tiene && (r.item.criticidad === 'ALTA' || r.item.criticidad === 'MEDIA'))
+                .sort((a, b) => {
+                    const orden = { ALTA: 0, MEDIA: 1 };
+                    return orden[a.item.criticidad] - orden[b.item.criticidad];
+                })
+                .map(r => ({ 
+                    texto: r.item.texto, 
+                    criticidad: r.item.criticidad 
+                }));
+            
+            return {
+                mundoId,
+                mundoNombre: mundo.nombre,
+                nivel,
+                color,
+                mensaje,
+                puntaje,
+                puntajeMaximo,
+                criticasFaltantes,
+                prioridades,
+                itemsMarcados: respuestas.filter(r => r.tiene).length,
+                itemsTotal: respuestas.length
+            };
+        }
+
+        function generarDiagnosticoCompleto() {
+            const diagnosticosPorMundo = mundos.map(m => diagnosticarMundo(m.id));
+            
+            const puntajeTotal = diagnosticosPorMundo.reduce((sum, d) => sum + d.puntaje, 0);
+            const puntajeMaximo = diagnosticosPorMundo.reduce((sum, d) => sum + d.puntajeMaximo, 0);
+            const porcentaje = Math.round((puntajeTotal / puntajeMaximo) * 100);
+            
+            const mundosRojos = diagnosticosPorMundo.filter(d => d.nivel === 'ROJO').length;
+            const mundosAmarillos = diagnosticosPorMundo.filter(d => d.nivel === 'AMARILLO').length;
+            const mundosVerdes = diagnosticosPorMundo.filter(d => d.nivel === 'VERDE').length;
+            
+            let clasificacionGlobal, mensajeGlobal;
+            
+            if (mundosRojos >= 3) {
+                clasificacionGlobal = 'ROJO';
+                mensajeGlobal = 'Tu situación necesita atención urgente. Pero no estás sola, vamos a ayudarte paso a paso.';
+            } else if (mundosRojos >= 1 || mundosAmarillos >= 3) {
+                clasificacionGlobal = 'AMARILLO';
+                mensajeGlobal = 'Hay varias cosas que podemos mejorar juntas. Vamos a trabajar en tus prioridades.';
+            } else {
+                clasificacionGlobal = 'VERDE';
+                mensajeGlobal = 'Tu situación está estable. Sigamos trabajando para que siga así.';
+            }
+            
+            const todasPrioridades = diagnosticosPorMundo
+                .flatMap(d => d.prioridades.map(p => ({ mundo: d.mundoNombre, ...p })))
+                .sort((a, b) => {
+                    const orden = { ALTA: 0, MEDIA: 1 };
+                    return orden[a.criticidad] - orden[b.criticidad];
+                })
+                .slice(0, 5);
+            
+            return {
+                diagnosticosPorMundo,
+                puntajeTotal,
+                puntajeMaximo,
+                porcentaje,
+                mundosRojos,
+                mundosAmarillos,
+                mundosVerdes,
+                clasificacionGlobal,
+                mensajeGlobal,
+                prioridades: todasPrioridades
+            };
+        }
+
+        // ============================================
+        // SONIDOS
+        // ============================================
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            if (type === 'check') {
+                osc.frequency.value = 600;
+                gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.15);
+            } else if (type === 'complete') {
+                [523, 659, 784].forEach((freq, i) => {
+                    const o = audioContext.createOscillator();
+                    const g = audioContext.createGain();
+                    o.connect(g);
+                    g.connect(audioContext.destination);
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0.2, audioContext.currentTime + i * 0.15);
+                    g.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.15 + 0.2);
+                    o.start(audioContext.currentTime + i * 0.15);
+                    o.stop(audioContext.currentTime + i * 0.15 + 0.2);
+                });
+            }
+        }
+
+        // ============================================
+        // TRANSICIONES Y FEEDBACK
+        // ============================================
+        function mostrarTransicion(mundoId) {
+            return new Promise(resolve => {
+                const mundo = mundos.find(m => m.id === mundoId);
+                
+                const overlay = document.createElement('div');
+                overlay.className = 'fixed inset-0 bg-gradient-to-br ' + mundo.color + ' z-50 flex items-center justify-center';
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.5s ease';
+                
+                overlay.innerHTML = `
+                    <div class="text-center text-white px-6">
+                        <div class="text-9xl mb-6 animate-float">${mundo.icono}</div>
+                        <h2 class="text-5xl font-bold mb-4" style="opacity: 0; transition: opacity 0.6s ease;" id="transTitle">${mundo.nombre}</h2>
+                        <p class="text-2xl italic" style="opacity: 0; transition: opacity 0.6s ease;" id="transSubtitle">${mundo.microrelato}</p>
+                    </div>
+                `;
+                
+                document.body.appendChild(overlay);
+                
+                setTimeout(() => overlay.style.opacity = '1', 50);
+                setTimeout(() => document.getElementById('transTitle').style.opacity = '1', 400);
+                setTimeout(() => document.getElementById('transSubtitle').style.opacity = '1', 1000);
+                
+                setTimeout(() => {
+                    koraiVoz.hablar(textosKorai.mundos[mundoId]);
+                }, 1400);
+                
+                setTimeout(() => {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => {
+                        overlay.remove();
+                        resolve();
+                    }, 500);
+                }, 2500);
+            });
+        }
+
+        function mostrarToast(texto, emoji = '💙') {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-2xl shadow-2xl p-6 z-50 toast-enter';
+            toast.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="text-4xl animate-pulse-heart">${emoji}</div>
+                    <div class="font-medium text-gray-800">${texto}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 2500);
+        }
+
+        // ============================================
+        // RENDERS
+        // ============================================
+        function renderMinimapa() {
+            return `
+                <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-40 bg-white/90 backdrop-blur rounded-full px-6 py-3 shadow-lg">
+                    <div class="flex items-center gap-3">
+                        ${mundos.map((m, idx) => {
+                            const completado = state.minimapa.mundosCompletados.includes(m.id);
+                            const actual = state.mundoActual === m.id;
+                            return `
+                                <div class="relative group">
+                                    <div class="w-3 h-3 rounded-full transition-all ${
+                                        completado ? 'bg-green-500' :
+                                        actual ? 'bg-purple-500 ring-2 ring-purple-300 animate-pulse-heart' :
+                                        'bg-gray-300'
+                                    }"></div>
+                                    <div class="hidden md:group-hover:block absolute top-full mt-2 left-1/2 transform -translate-x-1/2 whitespace-nowrap bg-gray-800 text-white text-xs px-3 py-1 rounded pointer-events-none">
+                                        ${m.nombre}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderBienvenida() {
+            return `
+                <div class="min-h-screen flex items-center justify-center p-6">
+                    <div class="max-w-2xl w-full text-center">
+                        <div class="text-9xl mb-8 animate-float">💙</div>
+                        <h1 class="text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-pink-600 bg-clip-text text-transparent mb-6">
+                            Korai
+                        </h1>
+                        <p class="text-2xl text-gray-700 mb-4">
+                            Tu acompañante social
+                        </p>
+                        <p class="text-lg text-gray-600 mb-12">
+                            Voy a acompañarte para conocer tu situación y ayudarte
+                        </p>
+                        <div class="bg-white rounded-3xl shadow-2xl p-10 mb-8">
+                            <div class="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 mb-8">
+                                <p class="text-gray-700 text-lg">
+                                    💙 Marcá solo <strong>lo que ya tenés resuelto</strong> hoy
+                                </p>
+                            </div>
+                            <button 
+                                onclick="empezarDiagnostico()" 
+                                class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white text-2xl font-bold px-16 py-6 rounded-2xl shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all"
+                                aria-label="Empezar diagnóstico">
+                                Empezar
+                            </button>
+                        </div>
+                        <p class="text-sm text-gray-500">
+                            🔒 Tu información es confidencial
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderExplorando() {
+            const mundo = mundos.find(m => m.id === state.mundoActual);
+            const esUltimo = state.mundoIndex === 5;
+            
+            return `
+                ${renderMinimapa()}
+                <div class="min-h-screen bg-gradient-to-br ${mundo.color} p-6 pt-24">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="text-center mb-8 text-white">
+                            <div class="text-8xl mb-4 animate-float">${mundo.icono}</div>
+                            <h1 class="text-5xl font-bold mb-4">${mundo.nombre}</h1>
+                            <p class="text-2xl italic opacity-90">${mundo.microrelato}</p>
+                        </div>
+                        <div class="bg-white/95 backdrop-blur rounded-2xl p-6 mb-6 shadow-xl">
+                            <p class="text-center text-lg text-gray-800">
+                                💙 <strong>Marcá lo que ya tenés resuelto</strong>
+                            </p>
+                        </div>
+                        <div class="space-y-4">
+                            ${mundo.items.map(item => {
+                                const cellId = `${mundo.id}_${item.id}`;
+                                const marcado = state.respuestas[cellId] === true;
+                                return `
+                                    <button 
+                                        onclick="toggleItem('${mundo.id}', '${item.id}')"
+                                        class="w-full p-6 rounded-2xl transition-all shadow-lg hover:shadow-2xl ${
+                                            marcado 
+                                                ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white' 
+                                                : 'bg-white text-gray-800 hover:bg-gray-50'
+                                        }">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-12 h-12 rounded-full border-4 flex items-center justify-center flex-shrink-0 ${
+                                                marcado ? 'bg-white border-white' : 'border-gray-300'
+                                            }">
+                                                ${marcado ? '<span class="text-green-500 text-2xl item-marcado">✓</span>' : ''}
+                                            </div>
+                                            <div class="text-left text-lg font-medium flex-1">
+                                                ${item.texto}
+                                            </div>
+                                        </div>
+                                    </button>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="mt-8 text-center">
+                            <button 
+                                onclick="completarMundo()" 
+                                class="bg-white text-gray-800 font-bold px-12 py-4 rounded-2xl text-xl shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all">
+                                ${esUltimo ? 'Terminar' : 'Continuar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPausaHumana() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-6">
+                    <div class="max-w-2xl w-full bg-white rounded-3xl shadow-2xl p-8">
+                        <div class="text-center mb-8">
+                            <div class="text-6xl mb-4 animate-pulse-heart">💙</div>
+                            <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                                Antes de seguir, conocémonos
+                            </h2>
+                            <p class="text-gray-600">
+                                Necesito algunos datos para ayudarte mejor
+                            </p>
+                        </div>
+                        <div class="space-y-6">
+                            <div>
+                                <label for="inputNombre" class="block text-sm font-medium text-gray-700 mb-2">
+                                    ¿Cómo te llamás?
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="inputNombre"
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none text-lg"
+                                    placeholder="Tu nombre"
+                                    value="${state.persona.nombre}"
+                                />
+                            </div>
+                            <div>
+                                <label for="inputEdad" class="block text-sm font-medium text-gray-700 mb-2">
+                                    ¿Cuántos años tenés?
+                                </label>
+                                <input 
+                                    type="number" 
+                                    id="inputEdad"
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none text-lg"
+                                    placeholder="Tu edad"
+                                    value="${state.persona.edad || ''}"
+                                    min="1"
+                                    max="120"
+                                />
+                            </div>
+                            <div>
+                                <label for="inputBarrio" class="block text-sm font-medium text-gray-700 mb-2">
+                                    ¿En qué barrio vivís?
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="inputBarrio"
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none text-lg"
+                                    placeholder="Tu barrio"
+                                    value="${state.persona.barrio}"
+                                />
+                            </div>
+                            <div class="border-2 border-dashed border-purple-300 rounded-xl p-6 bg-purple-50">
+                                <div class="text-center">
+                                    <div class="text-4xl mb-3">📹</div>
+                                    <h3 class="font-bold text-gray-800 mb-2">
+                                        Video (opcional)
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mb-4">
+                                        15 segundos para conocerte mejor
+                                    </p>
+                                    ${!state.persona.videoBlobUrl ? `
+                                        <button 
+                                            onclick="videoRecorder.iniciar()"
+                                            class="bg-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-purple-700 transition-all">
+                                            Grabar video
+                                        </button>
+                                    ` : `
+                                        <video 
+                                            src="${state.persona.videoBlobUrl}" 
+                                            controls 
+                                            class="w-full max-w-sm mx-auto rounded-lg mb-3">
+                                        </video>
+                                        <button 
+                                            onclick="videoRecorder.reiniciar()"
+                                            class="text-purple-600 text-sm hover:underline">
+                                            Volver a grabar
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 flex gap-4">
+                            <button 
+                                onclick="saltarPausa()"
+                                class="flex-1 border-2 border-gray-300 text-gray-700 px-6 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all">
+                                Saltar video
+                            </button>
+                            <button 
+                                onclick="completarPausa()"
+                                class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:shadow-xl transition-all">
+                                Continuar →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderProcesando() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center p-6">
+                    <div class="text-center">
+                        <div class="text-8xl mb-8 animate-pulse-heart">💙</div>
+                        <div class="mb-8">
+                            <div class="flex justify-center gap-2">
+                                ${[0, 1, 2, 3, 4, 5].map(i => `
+                                    <div class="w-3 h-3 bg-purple-600 rounded-full" style="animation: bounce 0.6s ease-in-out ${i * 0.1}s infinite"></div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-4">
+                            Analizando tu situación...
+                        </h2>
+                        <p class="text-gray-600 text-lg">
+                            Dame unos segundos
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSemaforo() {
+            if (!state.diagnostico) {
+                state.diagnostico = generarDiagnosticoCompleto();
+            }
+            
+            const d = state.diagnostico;
+            
+            return `
+                <div class="max-w-6xl mx-auto p-6 space-y-6">
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-8 text-white">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 class="text-4xl font-bold mb-2">🚦 Tus Resultados</h1>
+                                <p class="text-lg opacity-90">${d.mensajeGlobal}</p>
+                            </div>
+                            <div class="text-center bg-white/20 rounded-xl p-4">
+                                <div class="text-5xl font-bold">${d.porcentaje}%</div>
+                                <div class="text-sm opacity-75">Tu nivel</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="text-center">
+                                <div class="text-3xl font-bold">${d.mundosRojos}</div>
+                                <div class="text-sm opacity-75">Áreas rojas</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl font-bold">${d.mundosAmarillos}</div>
+                                <div class="text-sm opacity-75">Áreas amarillas</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl font-bold">${d.mundosVerdes}</div>
+                                <div class="text-sm opacity-75">Áreas verdes</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${d.diagnosticosPorMundo.map(dm => {
+                        const mundo = mundos.find(m => m.id === dm.mundoId);
+                        
+                        // Obtener items que SÍ tiene (marcados)
+                        const itemsTiene = mundo.items.filter(item => 
+                            state.respuestas[`${dm.mundoId}_${item.id}`] === true
+                        );
+                        
+                        // Obtener items que NO tiene (sin marcar) - ESTO ES LO QUE FALTA TRABAJAR
+                        const itemsFaltan = mundo.items.filter(item => 
+                            state.respuestas[`${dm.mundoId}_${item.id}`] !== true
+                        );
+                        
+                        return `
+                            <div class="bg-white rounded-xl shadow-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-4">
+                                        <div class="text-5xl">${mundo.icono}</div>
+                                        <div>
+                                            <h3 class="text-2xl font-bold">${dm.mundoNombre}</h3>
+                                            <p class="text-gray-600 text-sm">${dm.mensaje}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-4xl font-bold text-gray-800 mb-2">${dm.itemsMarcados}/${dm.itemsTotal}</div>
+                                        <div class="${dm.color} text-white px-6 py-2 rounded-lg font-bold text-lg">
+                                            ${dm.nivel}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                ${itemsTiene.length > 0 ? `
+                                    <div class="mb-4 bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                                        <div class="font-bold text-green-900 mb-2">✅ Lo que ya tenés resuelto:</div>
+                                        <ul class="space-y-1">
+                                            ${itemsTiene.map(item => `
+                                                <li class="text-sm text-green-800">• ${item.texto}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                                
+                                ${itemsFaltan.length > 0 ? `
+                                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+                                        <div class="font-bold text-yellow-900 mb-2">⚠️ Para trabajar juntas:</div>
+                                        <ul class="space-y-1">
+                                            ${itemsFaltan.map(item => {
+                                                const accion = convertirItemAAccion(dm.mundoId, item.id, item.criticidad);
+                                                return `
+                                                    <li class="text-sm text-yellow-800 ${item.criticidad === 'ALTA' ? 'font-bold' : ''}">
+                                                        • ${accion}
+                                                    </li>
+                                                `;
+                                            }).join('')}
+                                        </ul>
+                                    </div>
+                                ` : `
+                                    <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                                        <div class="font-bold text-green-900">🎉 ¡Excelente! Tenés todo resuelto en esta área</div>
+                                    </div>
+                                `}
+                            </div>
+                        `;
+                    }).join('')}
+
+                    <button onclick="goTo('prioridades')" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl">
+                        Ver tus prioridades →
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderPrioridades() {
+            const d = state.diagnostico;
+            const colores = ['from-red-500 to-red-600', 'from-orange-500 to-orange-600', 'from-yellow-500 to-yellow-600', 'from-blue-500 to-blue-600', 'from-green-500 to-green-600'];
+            
+            // Descripciones basadas en acciones
+            const descripcionesAccion = {
+                'alimentacion': 'La alimentación diaria es fundamental para la salud y el desarrollo de toda la familia',
+                'alimentacion_balanceada': 'Una dieta variada con frutas, verduras y proteínas previene enfermedades',
+                'higiene': 'El acceso regular a higiene previene enfermedades y mejora la calidad de vida',
+                'dientes': 'La salud dental evita dolor, infecciones y problemas de alimentación',
+                'vista': 'Ver bien es esencial para estudiar, trabajar y moverse con seguridad',
+                'enfermedades': 'El acceso a tratamiento evita que problemas menores se vuelvan graves',
+                'vacunas': 'Las vacunas protegen a los chicos de enfermedades peligrosas',
+                'medico': 'Los controles regulares detectan problemas a tiempo',
+                
+                'leer': 'Saber leer y escribir abre puertas laborales y autonomía personal',
+                'idioma': 'Un segundo idioma amplía oportunidades laborales y académicas',
+                'escuela': 'La educación formal es la base para un mejor futuro',
+                'adultos_estudian': 'Estudiar de adulto mejora oportunidades laborales y autoestima',
+                'utiles': 'Los útiles escolares son necesarios para aprender sin limitaciones',
+                'maestros': 'El diálogo con maestros mejora el rendimiento escolar de los chicos',
+                'tecnologia': 'Las habilidades digitales son esenciales en el mundo laboral actual',
+                'buena_escuela': 'Una escuela de calidad marca la diferencia en el aprendizaje',
+                
+                'plata_alcanza': 'Ingresos suficientes reducen el estrés y permiten cubrir necesidades',
+                'ingresos_fijos': 'La estabilidad económica permite planificar y vivir con tranquilidad',
+                'varias_changas': 'Múltiples fuentes de ingreso dan mayor seguridad económica',
+                'buscando': 'La búsqueda activa aumenta las chances de conseguir trabajo',
+                'oficio': 'Un oficio o habilidad específica mejora la empleabilidad',
+                'chicos_no_trabajan': 'Los niños deben estar en la escuela, no trabajando',
+                'adultos_laburan': 'El trabajo formal da ingresos estables y derechos laborales',
+                'organizamos': 'Organizar gastos permite aprovechar mejor los recursos',
+                
+                'agua': 'El agua potable es fundamental para la salud e higiene',
+                'luz': 'La electricidad permite estudiar, trabajar y vivir dignamente',
+                'telefono': 'La conectividad es necesaria para buscar trabajo e información',
+                'propia': 'Evitar el hacinamiento mejora la salud y la privacidad familiar',
+                'barrio_tranquilo': 'Vivir sin miedo permite desarrollarse plenamente',
+                'casa_firme': 'Una vivienda en buen estado protege de enfermedades',
+                'heladera': 'Los electrodomésticos básicos mejoran la calidad de vida',
+                'espacio': 'Espacio suficiente para dormir es fundamental para el descanso',
+                
+                'dni': 'El DNI permite acceder a derechos, programas sociales y servicios',
+                'banco': 'Una cuenta bancaria facilita gestionar el dinero y acceder a créditos',
+                'credito': 'El acceso a crédito puede ayudar en momentos críticos',
+                'ahorros': 'Tener ahorros da seguridad ante imprevistos',
+                'seguro': 'La cobertura de salud da tranquilidad y acceso a atención',
+                'servicios': 'Pagar servicios evita cortes y problemas legales',
+                'planes': 'Planificar el futuro da dirección y motivación',
+                'sin_violencia': 'Una familia sin violencia es la base del bienestar emocional',
+                
+                'apoyo': 'Una red de apoyo es fundamental para salir adelante en momentos difíciles',
+                'deporte': 'La actividad física mejora la salud física y mental',
+                'participamos': 'Participar en la comunidad fortalece la organización colectiva',
+                'diversion': 'El esparcimiento es necesario para el bienestar emocional',
+                'respeto': 'El respeto a la diversidad enriquece la convivencia',
+                'grupos': 'Pertenecer a grupos da contención y oportunidades',
+                'decidimos': 'La autonomía personal es un derecho fundamental',
+                'informados': 'Conocer los programas disponibles permite acceder a derechos'
+            };
+            
+            return `
+                <div class="max-w-5xl mx-auto p-6 space-y-6">
+                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+                        <h1 class="text-4xl font-bold mb-2">🎯 Tus Prioridades</h1>
+                        <p class="opacity-90">Tu plan de acción prioritario</p>
+                    </div>
+
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6">
+                        <div class="flex items-start gap-4">
+                            <div class="text-4xl">💙</div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 mb-2">Sobre tus prioridades</h3>
+                                <p class="text-gray-700 text-sm">
+                                    Estas son las acciones más importantes que podemos trabajar juntas ahora. 
+                                    No significa que estés haciendo algo mal, sino que son oportunidades concretas 
+                                    para mejorar tu situación. Vamos paso a paso.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${d.prioridades.length > 0 ? d.prioridades.map((p, idx) => {
+                        // Buscar el item original para obtener su id
+                        const mundo = mundos.find(m => m.nombre === p.mundo);
+                        const item = mundo?.items.find(i => i.texto === p.texto);
+                        const itemId = item?.id;
+                        
+                        // Convertir a acción
+                        const accion = itemId ? convertirItemAAccion(mundo.id, itemId, p.criticidad) : p.texto;
+                        const descripcion = itemId ? (descripcionesAccion[itemId] || 'Trabajar en esto mejorará tu calidad de vida') : 'Trabajar en esto mejorará tu calidad de vida';
+                        
+                        return `
+                            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all">
+                                
+                                <!-- Header con prioridad -->
+                                <div class="bg-gradient-to-r ${colores[idx]} p-5 text-white">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0">
+                                            ${idx + 1}
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="text-xs opacity-75 mb-1">
+                                                ${p.mundo}
+                                            </div>
+                                            <div class="text-xl font-bold">
+                                                ${accion}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Cuerpo con explicación -->
+                                <div class="p-6">
+                                    <div class="bg-purple-50 border-l-4 border-purple-500 p-4 rounded mb-4">
+                                        <div class="flex items-start gap-3">
+                                            <span class="text-2xl">ℹ️</span>
+                                            <div>
+                                                <div class="font-bold text-purple-900 mb-1">Por qué es importante:</div>
+                                                <p class="text-purple-800 text-sm">
+                                                    ${descripcion}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    ${p.criticidad === 'ALTA' ? `
+                                        <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xl">⚠️</span>
+                                                <span class="font-bold text-red-900 text-sm">Esta acción es urgente. Te vamos a ayudar a resolverla pronto.</span>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('') : `
+                        <div class="bg-green-50 border-2 border-green-200 rounded-2xl p-8 text-center">
+                            <div class="text-6xl mb-4">🎉</div>
+                            <h3 class="text-2xl font-bold text-green-900 mb-2">¡Excelente!</h3>
+                            <p class="text-green-800">No tenés prioridades críticas por ahora. Seguí así.</p>
+                        </div>
+                    `}
+
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <button onclick="goTo('semaforo')" class="border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl hover:bg-purple-50 transition-all">
+                            ← Ver resultados
+                        </button>
+                        <button onclick="goTo('metas')" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl hover:shadow-xl transition-all">
+                            Ver mis metas →
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMetas() {
+            const d = state.diagnostico;
+            
+            // Metas predefinidas por mundo
+            const metasPorMundo = {
+                salud: {
+                    corto: {
+                        titulo: 'Sacar turnos en CAPS y completar vacunación',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'CAPS', url: 'https://www.argentina.gob.ar/salud/caps' },
+                            { nombre: 'Calendario Vacunas', url: 'https://www.argentina.gob.ar/salud/vacunas' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Conseguir obra social o AUH',
+                        plazo: '6 meses - 1 año'
+                    },
+                    largo: {
+                        titulo: 'Toda la familia con salud preventiva y controles regulares',
+                        plazo: '2-3 años'
+                    }
+                },
+                educacion: {
+                    corto: {
+                        titulo: 'Inscribirse en Plan Fines o cursos de oficios',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'Plan FinEs', url: 'https://www.argentina.gob.ar/educacion/fines' },
+                            { nombre: 'Becas Progresar', url: 'https://www.argentina.gob.ar/educacion/progresar' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Terminar la secundaria',
+                        plazo: '1-2 años'
+                    },
+                    largo: {
+                        titulo: 'Que todos los chicos terminen la secundaria',
+                        plazo: '5-10 años'
+                    }
+                },
+                trabajo: {
+                    corto: {
+                        titulo: 'Inscribirse en Potenciar Trabajo y Portal de Empleo',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'Potenciar Trabajo', url: 'https://www.argentina.gob.ar/desarrollosocial/potenciartrabajo' },
+                            { nombre: 'Portal Empleo', url: 'https://www.argentina.gob.ar/trabajo/buscarempleo' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Conseguir trabajo formal con aportes',
+                        plazo: '6 meses - 1 año'
+                    },
+                    largo: {
+                        titulo: 'Trabajo estable con derechos laborales',
+                        plazo: '2-5 años'
+                    }
+                },
+                vivienda: {
+                    corto: {
+                        titulo: 'Mejorar condiciones básicas (agua, luz, techo)',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'Tarifa Social', url: 'https://www.argentina.gob.ar/servicio/solicitar-la-tarifa-social' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Acceder a crédito PROCREAR o regularización dominial',
+                        plazo: '1-2 años'
+                    },
+                    largo: {
+                        titulo: 'Vivienda propia escriturada',
+                        plazo: '5-10 años'
+                    }
+                },
+                economia: {
+                    corto: {
+                        titulo: 'Abrir cuenta bancaria y tramitar DNI actualizado',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'Cuenta DNI', url: 'https://www.bna.com.ar/Personas/CuentaDNI' },
+                            { nombre: 'DNI Renovación', url: 'https://www.argentina.gob.ar/interior/dni' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Tener todos los documentos al día y acceso a AUH',
+                        plazo: '6 meses'
+                    },
+                    largo: {
+                        titulo: 'Ahorros, crédito y planificación financiera',
+                        plazo: '2-5 años'
+                    }
+                },
+                comunidad: {
+                    corto: {
+                        titulo: 'Participar en actividades del barrio o club',
+                        plazo: '1-3 meses',
+                        programas: [
+                            { nombre: 'Clubes de Barrio', url: 'https://www.argentina.gob.ar/desarrollo-social/clubes-de-barrio' }
+                        ]
+                    },
+                    mediano: {
+                        titulo: 'Formar parte activa de grupos comunitarios',
+                        plazo: '6 meses - 1 año'
+                    },
+                    largo: {
+                        titulo: 'Red social sólida y autonomía comunitaria',
+                        plazo: '2-5 años'
+                    }
+                }
+            };
+            
+            return `
+                <div class="max-w-6xl mx-auto p-6 space-y-6">
+                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+                        <h1 class="text-4xl font-bold mb-2">🎯 Mis Metas</h1>
+                        <p class="opacity-90">Tu camino de mejora en el tiempo</p>
+                    </div>
+
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6">
+                        <div class="flex items-start gap-4">
+                            <div class="text-4xl">💙</div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 mb-2">Sobre tus metas</h3>
+                                <p class="text-gray-700 text-sm">
+                                    Estas son metas sugeridas para cada área de tu vida. No tenés que cumplirlas todas al mismo tiempo. 
+                                    Elegí las que sean más importantes para vos ahora y avanzá de a poco.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${mundos.map(mundo => {
+                        const diagnostico = d.diagnosticosPorMundo.find(dm => dm.mundoId === mundo.id);
+                        const metas = metasPorMundo[mundo.id];
+                        
+                        return `
+                            <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+                                
+                                <!-- Header del mundo -->
+                                <div class="bg-gradient-to-r ${mundo.color} p-6 text-white">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-4">
+                                            <div class="text-5xl">${mundo.icono}</div>
+                                            <div>
+                                                <h2 class="text-2xl font-bold">${mundo.nombre}</h2>
+                                                <p class="text-sm opacity-90">${mundo.microrelato}</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-center bg-white/20 rounded-xl px-4 py-2">
+                                            <div class="${diagnostico.color} text-white px-3 py-1 rounded font-bold text-sm">
+                                                ${diagnostico.nivel}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metas -->
+                                <div class="p-6">
+                                    <div class="grid md:grid-cols-3 gap-6">
+                                        
+                                        <!-- Corto Plazo -->
+                                        <div class="border-2 border-orange-200 rounded-xl p-4 bg-orange-50">
+                                            <div class="flex items-center gap-2 mb-3">
+                                                <span class="text-2xl">⏱️</span>
+                                                <div>
+                                                    <div class="font-bold text-orange-900">Corto Plazo</div>
+                                                    <div class="text-xs text-orange-700">${metas.corto.plazo}</div>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-800 font-medium mb-3">${metas.corto.titulo}</p>
+                                            
+                                            ${metas.corto.programas ? `
+                                                <div class="mt-3 pt-3 border-t border-orange-200">
+                                                    <div class="text-xs font-semibold text-purple-700 mb-2">🔗 Programas:</div>
+                                                    <div class="space-y-1">
+                                                        ${metas.corto.programas.map(p => `
+                                                            <a href="${p.url}" target="_blank" class="block text-xs text-blue-600 hover:underline">
+                                                                → ${p.nombre}
+                                                            </a>
+                                                        `).join('')}
+                                                    </div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+
+                                        <!-- Mediano Plazo -->
+                                        <div class="border-2 border-blue-200 rounded-xl p-4 bg-blue-50">
+                                            <div class="flex items-center gap-2 mb-3">
+                                                <span class="text-2xl">📆</span>
+                                                <div>
+                                                    <div class="font-bold text-blue-900">Mediano Plazo</div>
+                                                    <div class="text-xs text-blue-700">${metas.mediano.plazo}</div>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-800 font-medium">${metas.mediano.titulo}</p>
+                                        </div>
+
+                                        <!-- Largo Plazo -->
+                                        <div class="border-2 border-purple-200 rounded-xl p-4 bg-purple-50">
+                                            <div class="flex items-center gap-2 mb-3">
+                                                <span class="text-2xl">🎯</span>
+                                                <div>
+                                                    <div class="font-bold text-purple-900">Largo Plazo</div>
+                                                    <div class="text-xs text-purple-700">${metas.largo.plazo}</div>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-800 font-medium">${metas.largo.titulo}</p>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <button onclick="goTo('prioridades')" class="border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl hover:bg-purple-50 transition-all">
+                            ← Prioridades
+                        </button>
+                        <button onclick="goTo('recursos')" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl hover:shadow-xl transition-all">
+                            Ver todos los recursos →
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRecursos() {
+            return `
+                <div class="max-w-6xl mx-auto p-6 space-y-6">
+                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+                        <h1 class="text-4xl font-bold mb-2">📚 Programas para Vos</h1>
+                        <p class="opacity-90">Recursos que te pueden ayudar</p>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        ${mundos.map(dim => `
+                            <div class="bg-white rounded-xl shadow-lg p-6">
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="text-3xl">${dim.icono}</span>
+                                    <h4 class="text-xl font-bold text-gray-800">${dim.nombre}</h4>
+                                </div>
+                                <div class="space-y-2">
+                                    ${programas[dim.id].map(prog => `
+                                        <a href="${prog.url}" target="_blank" class="block bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-all group">
+                                            <div class="font-semibold text-sm text-purple-700 group-hover:text-purple-900 flex items-center gap-2">
+                                                ${prog.nombre}
+                                                <span class="text-xs opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                                            </div>
+                                            <div class="text-xs text-gray-600 mt-1">${prog.desc}</div>
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <button onclick="goTo('prioridades')" class="border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl">
+                            ← Prioridades
+                        </button>
+                        <button onclick="goTo('dashboard')" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl">
+                            Dashboard →
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            const d = state.diagnostico;
+            
+            // Calcular alertas críticas
+            const alertasCriticas = d.diagnosticosPorMundo
+                .filter(dm => dm.criticasFaltantes > 0)
+                .reduce((sum, dm) => sum + dm.criticasFaltantes, 0);
+            
+            // Calcular items totales marcados
+            const itemsMarcadosTotal = d.diagnosticosPorMundo.reduce((sum, dm) => sum + dm.itemsMarcados, 0);
+            const itemsTotal = d.diagnosticosPorMundo.reduce((sum, dm) => sum + dm.itemsTotal, 0);
+            
+            // Simular datos territoriales (en producción vendrían de API)
+            const datosTerritoriales = {
+                familias: 127,
+                promedioBarrio: Math.floor(Math.random() * 15 + 35), // 35-50%
+                promedioCiudad: Math.floor(Math.random() * 10 + 45), // 45-55%
+                familiasRojas: 34,
+                familiasAmarillas: 58,
+                familiasVerdes: 35,
+                derivacionesActivas: 89
+            };
+            
+            return `
+                <div class="max-w-7xl mx-auto p-6 space-y-6">
+                    
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 text-white">
+                        <h1 class="text-4xl font-bold mb-2">🗺️ Dashboard Territorial</h1>
+                        <p class="text-lg opacity-90">${state.persona.barrio || 'Tu barrio'}</p>
+                    </div>
+
+                    <!-- Métricas principales -->
+                    <div class="grid md:grid-cols-4 gap-4">
+                        
+                        <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-4xl">📊</div>
+                                <div class="text-xs text-gray-500">Tu score</div>
+                            </div>
+                            <div class="text-4xl font-bold ${
+                                d.clasificacionGlobal === 'ROJO' ? 'text-red-600' : 
+                                d.clasificacionGlobal === 'AMARILLO' ? 'text-yellow-600' : 
+                                'text-green-600'
+                            }">${d.porcentaje}%</div>
+                            <div class="text-sm text-gray-600 mt-1">${itemsMarcadosTotal}/${itemsTotal} items</div>
+                            <div class="mt-3">
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-gradient-to-r ${
+                                        d.clasificacionGlobal === 'ROJO' ? 'from-red-500 to-red-600' : 
+                                        d.clasificacionGlobal === 'AMARILLO' ? 'from-yellow-500 to-yellow-600' : 
+                                        'from-green-500 to-green-600'
+                                    } h-2 rounded-full transition-all" style="width: ${d.porcentaje}%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-4xl">${d.clasificacionGlobal === 'ROJO' ? '🔴' : d.clasificacionGlobal === 'AMARILLO' ? '🟡' : '🟢'}</div>
+                                <div class="text-xs text-gray-500">Clasificación</div>
+                            </div>
+                            <div class="text-3xl font-bold ${
+                                d.clasificacionGlobal === 'ROJO' ? 'text-red-600' : 
+                                d.clasificacionGlobal === 'AMARILLO' ? 'text-yellow-600' : 
+                                'text-green-600'
+                            }">${d.clasificacionGlobal}</div>
+                            <div class="text-sm text-gray-600 mt-1">Nivel global</div>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-4xl">⚠️</div>
+                                <div class="text-xs text-gray-500">Urgente</div>
+                            </div>
+                            <div class="text-4xl font-bold text-red-600">${alertasCriticas}</div>
+                            <div class="text-sm text-gray-600 mt-1">Alertas críticas</div>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-4xl">🎯</div>
+                                <div class="text-xs text-gray-500">Trabajar</div>
+                            </div>
+                            <div class="text-4xl font-bold text-purple-600">${d.prioridades.length}</div>
+                            <div class="text-sm text-gray-600 mt-1">Prioridades</div>
+                        </div>
+                    </div>
+
+                    <!-- Distribución por mundo -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                            <span>📊</span>
+                            Distribución por Área
+                        </h3>
+                        <div class="grid md:grid-cols-6 gap-4">
+                            ${d.diagnosticosPorMundo.map(dm => {
+                                const mundo = mundos.find(m => m.id === dm.mundoId);
+                                const porcentaje = Math.round((dm.puntaje / dm.puntajeMaximo) * 100);
+                                
+                                return `
+                                    <div class="text-center">
+                                        <div class="text-4xl mb-2">${mundo.icono}</div>
+                                        <div class="text-xs text-gray-600 mb-2 font-medium">${mundo.nombre}</div>
+                                        <div class="relative w-full h-24 bg-gray-100 rounded-lg overflow-hidden">
+                                            <div class="absolute bottom-0 w-full bg-gradient-to-t ${mundo.color} transition-all" style="height: ${porcentaje}%"></div>
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <span class="text-2xl font-bold text-gray-800">${porcentaje}%</span>
+                                            </div>
+                                        </div>
+                                        <div class="${dm.color} text-white text-xs font-bold px-2 py-1 rounded mt-2">
+                                            ${dm.nivel}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Comparativa territorial -->
+                    <div class="grid md:grid-cols-2 gap-6">
+                        
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                                <span>🏘️</span>
+                                Contexto Territorial
+                            </h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div>
+                                        <div class="text-sm text-gray-600">Tu barrio</div>
+                                        <div class="font-bold text-gray-800">${state.persona.barrio}</div>
+                                    </div>
+                                    <div class="text-3xl font-bold text-blue-600">${datosTerritoriales.familias}</div>
+                                </div>
+                                
+                                <div class="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                                    <div class="text-sm text-blue-800 mb-2">Promedio del barrio</div>
+                                    <div class="flex items-end gap-4">
+                                        <div class="text-3xl font-bold text-blue-600">${datosTerritoriales.promedioBarrio}%</div>
+                                        <div class="text-sm text-gray-600 mb-1">
+                                            ${d.porcentaje > datosTerritoriales.promedioBarrio ? 
+                                                `<span class="text-green-600">▲ ${d.porcentaje - datosTerritoriales.promedioBarrio}% por encima</span>` :
+                                                d.porcentaje < datosTerritoriales.promedioBarrio ?
+                                                `<span class="text-orange-600">▼ ${datosTerritoriales.promedioBarrio - d.porcentaje}% por debajo</span>` :
+                                                `<span class="text-gray-600">= En el promedio</span>`
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 bg-purple-50 rounded-lg border-2 border-purple-200">
+                                    <div class="text-sm text-purple-800 mb-2">Promedio ciudad</div>
+                                    <div class="flex items-end gap-4">
+                                        <div class="text-3xl font-bold text-purple-600">${datosTerritoriales.promedioCiudad}%</div>
+                                        <div class="text-sm text-gray-600 mb-1">
+                                            ${d.porcentaje > datosTerritoriales.promedioCiudad ? 
+                                                `<span class="text-green-600">▲ Mejor que promedio</span>` :
+                                                `<span class="text-orange-600">▼ Necesita apoyo</span>`
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                                <span>🚦</span>
+                                Distribución Barrial
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-32 text-sm font-medium text-gray-700">ROJO</div>
+                                    <div class="flex-1">
+                                        <div class="w-full bg-gray-100 rounded-full h-8 relative overflow-hidden">
+                                            <div class="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 transition-all" 
+                                                 style="width: ${(datosTerritoriales.familiasRojas / datosTerritoriales.familias) * 100}%">
+                                            </div>
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <span class="text-sm font-bold text-gray-800">${datosTerritoriales.familiasRojas} familias</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-4">
+                                    <div class="w-32 text-sm font-medium text-gray-700">AMARILLO</div>
+                                    <div class="flex-1">
+                                        <div class="w-full bg-gray-100 rounded-full h-8 relative overflow-hidden">
+                                            <div class="absolute inset-0 bg-gradient-to-r from-yellow-500 to-yellow-600 transition-all" 
+                                                 style="width: ${(datosTerritoriales.familiasAmarillas / datosTerritoriales.familias) * 100}%">
+                                            </div>
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <span class="text-sm font-bold text-gray-800">${datosTerritoriales.familiasAmarillas} familias</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-4">
+                                    <div class="w-32 text-sm font-medium text-gray-700">VERDE</div>
+                                    <div class="flex-1">
+                                        <div class="w-full bg-gray-100 rounded-full h-8 relative overflow-hidden">
+                                            <div class="absolute inset-0 bg-gradient-to-r from-green-500 to-green-600 transition-all" 
+                                                 style="width: ${(datosTerritoriales.familiasVerdes / datosTerritoriales.familias) * 100}%">
+                                            </div>
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <span class="text-sm font-bold text-gray-800">${datosTerritoriales.familiasVerdes} familias</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 p-4 bg-green-50 rounded-lg border-2 border-green-200">
+                                    <div class="flex items-center gap-3">
+                                        <div class="text-3xl">✅</div>
+                                        <div>
+                                            <div class="font-bold text-green-900">${datosTerritoriales.derivacionesActivas}</div>
+                                            <div class="text-sm text-green-700">Derivaciones activas</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mundos que necesitan atención -->
+                    ${d.diagnosticosPorMundo.filter(dm => dm.nivel === 'ROJO' || dm.nivel === 'AMARILLO').length > 0 ? `
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                                <span>🎯</span>
+                                Áreas que Necesitan Atención
+                            </h3>
+                            <div class="grid md:grid-cols-2 gap-4">
+                                ${d.diagnosticosPorMundo
+                                    .filter(dm => dm.nivel === 'ROJO' || dm.nivel === 'AMARILLO')
+                                    .map(dm => {
+                                        const mundo = mundos.find(m => m.id === dm.mundoId);
+                                        return `
+                                            <div class="border-2 ${
+                                                dm.nivel === 'ROJO' ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50'
+                                            } rounded-lg p-4">
+                                                <div class="flex items-start gap-3 mb-3">
+                                                    <div class="text-3xl">${mundo.icono}</div>
+                                                    <div class="flex-1">
+                                                        <div class="font-bold text-gray-800">${mundo.nombre}</div>
+                                                        <div class="text-xs ${dm.nivel === 'ROJO' ? 'text-red-700' : 'text-yellow-700'}">${dm.mensaje}</div>
+                                                    </div>
+                                                    <div class="${dm.color} text-white text-xs font-bold px-2 py-1 rounded">
+                                                        ${dm.nivel}
+                                                    </div>
+                                                </div>
+                                                ${dm.criticasFaltantes > 0 ? `
+                                                    <div class="text-xs font-bold ${dm.nivel === 'ROJO' ? 'text-red-900' : 'text-yellow-900'} mb-1">
+                                                        ⚠️ ${dm.criticasFaltantes} alertas críticas
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- Navegación -->
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <button onclick="goTo('semaforo')" class="border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl hover:bg-purple-50 transition-all">
+                            🚦 Ver Resultados
+                        </button>
+                        <button onclick="goTo('metas')" class="border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl hover:bg-purple-50 transition-all">
+                            🎯 Mis Metas
+                        </button>
+                        <button onclick="goTo('perfil')" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl hover:shadow-xl transition-all">
+                            Ver Perfil →
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPerfil() {
+            const d = state.diagnostico;
+            return `
+                <div class="max-w-7xl mx-auto p-6 space-y-6">
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-8 text-white">
+                        <div class="flex items-start gap-6">
+                            <div class="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center text-5xl">👤</div>
+                            <div class="flex-1">
+                                <h1 class="text-4xl font-bold mb-4">${state.persona.nombre}</h1>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div><div class="opacity-75">Edad</div><div class="font-bold text-lg">${state.persona.edad} años</div></div>
+                                    <div><div class="opacity-75">Barrio</div><div class="font-bold text-lg">${state.persona.barrio}</div></div>
+                                    <div><div class="opacity-75">Nivel</div><div class="font-bold text-lg">${d.clasificacionGlobal}</div></div>
+                                    <div><div class="opacity-75">Score</div><div class="font-bold text-lg">${d.porcentaje}%</div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-xl font-bold mb-4">Por Área</h3>
+                            <div class="space-y-3">
+                                ${d.diagnosticosPorMundo.map(dm => `
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-2xl">${mundos.find(m => m.id === dm.mundoId).icono}</span>
+                                            <span class="font-medium">${dm.mundoNombre}</span>
+                                        </div>
+                                        <div class="${dm.color} text-white px-3 py-1 rounded font-bold text-sm">
+                                            ${dm.nivel}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        ${state.persona.videoBlobUrl ? `
+                            <div class="bg-white rounded-xl shadow-lg p-6">
+                                <h3 class="text-xl font-bold mb-4">Tu Presentación</h3>
+                                <video 
+                                    src="${state.persona.videoBlobUrl}" 
+                                    controls 
+                                    class="w-full rounded-lg">
+                                </video>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <button onclick="goTo('semaforo')" class="w-full border-2 border-purple-600 text-purple-600 font-bold py-4 rounded-xl">
+                        Ver resultados completos
+                    </button>
+                </div>
+            `;
+        }
+
+        // ============================================
+        // LÓGICA PRINCIPAL
+        // ============================================
+        function render() {
+            const app = document.getElementById('app');
+            const navbar = document.getElementById('navbar');
+            
+            if (['semaforo', 'prioridades', 'metas', 'recursos', 'dashboard', 'perfil'].includes(state.etapa)) {
+                navbar.classList.remove('hidden');
+                document.getElementById('navName').textContent = state.persona.nombre || 'Usuario';
+            } else {
+                navbar.classList.add('hidden');
+            }
+            
+            let html = '';
+            
+            switch(state.etapa) {
+                case 'bienvenida': html = renderBienvenida(); break;
+                case 'mundo': html = renderExplorando(); break;
+                case 'pausa': html = renderPausaHumana(); break;
+                case 'procesando': html = renderProcesando(); break;
+                case 'semaforo': html = renderSemaforo(); break;
+                case 'prioridades': html = renderPrioridades(); break;
+                case 'metas': html = renderMetas(); break;
+                case 'recursos': html = renderRecursos(); break;
+                case 'dashboard': html = renderDashboard(); break;
+                case 'perfil': html = renderPerfil(); break;
+            }
+            
+            app.innerHTML = html;
+        }
+
+        function goTo(etapa) {
+            state.etapa = etapa;
+            render();
+            window.scrollTo(0, 0);
+        }
+
+        function toggleVoz() {
+            const activa = koraiVoz.toggle();
+            document.getElementById('vozIcon').textContent = activa ? '🔊' : '🔇';
+            if (activa) {
+                koraiVoz.hablar("Hola de nuevo. Mi voz está activada.");
+            }
+        }
+
+        function empezarDiagnostico() {
+            state.mundoActual = mundos[0].id;
+            state.mundoIndex = 0;
+            state.minimapa.mundoActual = mundos[0].id;
+            
+            koraiVoz.hablar(textosKorai.bienvenida);
+            
+            setTimeout(() => {
+                mostrarTransicion(mundos[0].id).then(() => {
+                    state.etapa = 'mundo';
+                    render();
+                });
+            }, 2000);
+        }
+
+        function toggleItem(mundoId, itemId) {
+            const cellId = `${mundoId}_${itemId}`;
+            state.respuestas[cellId] = !state.respuestas[cellId];
+            
+            if (state.respuestas[cellId]) {
+                playSound('check');
+                if (navigator.vibrate) navigator.vibrate(10);
+            }
+            
+            render();
+        }
+
+        function completarMundo() {
+            if (!state.minimapa.mundosCompletados.includes(state.mundoActual)) {
+                state.minimapa.mundosCompletados.push(state.mundoActual);
+            }
+            
+            playSound('complete');
+            
+            const textoFeedback = textosKorai.finMundo[state.mundoActual];
+            koraiVoz.hablar(textoFeedback);
+            
+            mostrarToast("Perfecto, continuemos", mundos.find(m => m.id === state.mundoActual).icono);
+            
+            if (state.mundoIndex === 1 && !state.pausaHumanaCompletada) {
+                setTimeout(() => {
+                    state.etapa = 'pausa';
+                    koraiVoz.hablar(textosKorai.pausa);
+                    render();
+                }, 1000);
+                return;
+            }
+            
+            if (state.minimapa.mundosCompletados.length === 6) {
+                setTimeout(() => {
+                    state.etapa = 'procesando';
+                    koraiVoz.hablar(textosKorai.procesando);
+                    render();
+                    
+                    setTimeout(() => {
+                        state.diagnostico = generarDiagnosticoCompleto();
+                        state.etapa = 'semaforo';
+                        
+                        const textoResultado = textosKorai.resultados[state.diagnostico.clasificacionGlobal.toLowerCase()];
+                        koraiVoz.hablar(textoResultado);
+                        
+                        render();
+                    }, 3000);
+                }, 1000);
+                return;
+            }
+            
+            setTimeout(() => {
+                state.mundoIndex++;
+                const siguienteMundo = mundos[state.mundoIndex];
+                
+                mostrarTransicion(siguienteMundo.id).then(() => {
+                    state.mundoActual = siguienteMundo.id;
+                    state.minimapa.mundoActual = siguienteMundo.id;
+                    state.etapa = 'mundo';
+                    render();
+                });
+            }, 1000);
+        }
+
+        function saltarPausa() {
+            state.pausaHumanaCompletada = true;
+            
+            state.mundoIndex++;
+            const siguienteMundo = mundos[state.mundoIndex];
+            
+            mostrarTransicion(siguienteMundo.id).then(() => {
+                state.mundoActual = siguienteMundo.id;
+                state.etapa = 'mundo';
+                render();
+            });
+        }
+
+        function completarPausa() {
+            const nombre = document.getElementById('inputNombre').value.trim();
+            const edad = document.getElementById('inputEdad').value;
+            const barrio = document.getElementById('inputBarrio').value.trim();
+            
+            if (!nombre || !edad || !barrio) {
+                alert('Por favor completá tu nombre, edad y barrio.');
+                return;
+            }
+            
+            state.persona.nombre = nombre;
+            state.persona.edad = parseInt(edad);
+            state.persona.barrio = barrio;
+            state.pausaHumanaCompletada = true;
+            
+            playSound('complete');
+            koraiVoz.hablar(`Gracias ${nombre}. Sigamos.`);
+            
+            state.mundoIndex++;
+            const siguienteMundo = mundos[state.mundoIndex];
+            
+            setTimeout(() => {
+                mostrarTransicion(siguienteMundo.id).then(() => {
+                    state.mundoActual = siguienteMundo.id;
+                    state.etapa = 'mundo';
+                    render();
+                });
+            }, 1000);
+        }
+
+        // Inicializar
+        koraiVoz.init();
+        render();
+    </script><script>
+  function saveDiagnostico(data) {
+    localStorage.setItem("korai_diagnostico", JSON.stringify(data));
+  }
+
+  function loadDiagnostico() {
+    const data = localStorage.getItem("korai_diagnostico");
+    return data ? JSON.parse(data) : null;
+  }
+</script>
+
+
+<script>
+
+  function finalizarKorai() {
+    const diagnostico = {
+      fecha: new Date().toISOString(),
+      mensaje: "Diagnóstico completado",
+      nivelAlerta: "media"
+    };
+
+    saveDiagnostico(diagnostico);
+
+    alert("Korai guardó tu diagnóstico 💛");
+  }
+</script>
+<button onclick="finalizarKorai()" style="padding:12px; font-size:16px;">
+  Finalizar diagnóstico
+</button>
+<script>
+function mostrarResultadoKorai() {
+  const data = localStorage.getItem("korai_diagnostico");
+  if (!data) return;
+
+  const diagnostico = JSON.parse(data);
+
+  document.getElementById("resultadoTexto").innerHTML = `
+    <strong>Fecha:</strong> ${new Date(diagnostico.fecha).toLocaleString()}<br>
+    <strong>Nivel de alerta:</strong> ${diagnostico.nivelAlerta}<br><br>
+    ${diagnostico.mensaje}
+  `;
+
+  document.getElementById("resultadoKorai").style.display = "block";
+}
+
+document.addEventListener("DOMContentLoaded", mostrarResultadoKorai);
+</script>
+
+</body>
+<div id="resultadoKorai" style="
+  margin: 20px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  display: none;
+">
+  <h2>📊 Resultado del diagnóstico</h2>
+  <p id="resultadoTexto"></p>
+</div>
+
+<div style="
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+">
+  <button onclick="finalizarKorai()" style="
+    padding: 14px 18px;
+    font-size: 16px;
+    border-radius: 8px;
+    background: #000;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+  ">
+    Finalizar diagnóstico (prueba)
+  </button>
+</div>
+
+</html>
